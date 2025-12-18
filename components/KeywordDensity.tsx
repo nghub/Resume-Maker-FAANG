@@ -58,25 +58,25 @@ const KeywordDensity: React.FC<KeywordDensityProps> = ({ jdText, resumeText }) =
   });
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-      <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2 bg-slate-50/50">
-        <BarChart2 className="w-4 h-4 text-slate-500" />
-        <h3 className="font-bold text-slate-800 text-sm">Keyword Density</h3>
+    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden transition-colors">
+      <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center gap-2 bg-slate-50/50 dark:bg-slate-800/50">
+        <BarChart2 className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+        <h3 className="font-bold text-slate-800 dark:text-slate-200 text-sm">Keyword Density</h3>
       </div>
       <div className="p-4">
         <div className="space-y-4">
           {comparison.map((item) => (
             <div key={item.word} className="space-y-1.5">
-              <div className="flex justify-between text-xs font-medium text-slate-700">
+              <div className="flex justify-between text-xs font-medium text-slate-700 dark:text-slate-300">
                 <span className="capitalize font-bold">{item.word}</span>
-                <span className="text-slate-400">
+                <span className="text-slate-400 dark:text-slate-500">
                    JD: {item.jdCount} | You: {item.resumeCount}
                 </span>
               </div>
-              <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden flex">
+              <div className="h-2.5 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden flex">
                 {/* JD Bar - Target */}
                 <div 
-                  className="h-full bg-indigo-400/40 relative group" 
+                  className="h-full bg-indigo-400/40 dark:bg-indigo-500/30 relative group" 
                   style={{ width: `${Math.min(item.jdDensity * 8, 50)}%` }} 
                 >
                     <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-800 text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap z-10">
@@ -100,7 +100,7 @@ const KeywordDensity: React.FC<KeywordDensityProps> = ({ jdText, resumeText }) =
             <p className="text-xs text-slate-400 text-center py-2">Add more text to analyze density patterns.</p>
           )}
         </div>
-        <div className="mt-4 flex items-center justify-center gap-3 text-[10px] text-slate-500 border-t border-slate-50 pt-3">
+        <div className="mt-4 flex items-center justify-center gap-3 text-[10px] text-slate-500 dark:text-slate-400 border-t border-slate-50 dark:border-slate-700/50 pt-3">
             <div className="flex items-center gap-1">
                 <div className="w-2 h-2 bg-indigo-300 opacity-50 rounded-sm"></div>
                 <span>Target (JD)</span>

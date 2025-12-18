@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface ScoreChartProps {
@@ -23,7 +24,7 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ overallScore, projectedScore = 
   const color = getColor(overallScore);
 
   return (
-    <div className="flex flex-col items-center justify-center p-6 bg-white rounded-2xl border border-slate-100 shadow-sm">
+    <div className="flex flex-col items-center justify-center p-6 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm transition-colors">
       <div className="relative w-32 h-32">
         {/* Added viewBox to ensure the SVG scales correctly within the container without clipping */}
         <svg className="w-full h-full transform -rotate-90" viewBox="0 0 128 128">
@@ -32,9 +33,10 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ overallScore, projectedScore = 
             cx="64"
             cy="64"
             r={radius}
-            stroke="#f1f5f9"
+            stroke="currentColor"
             strokeWidth={strokeWidth}
             fill="transparent"
+            className="text-slate-100 dark:text-slate-700"
           />
           
           {/* Projected/Potential Score (Ghost) */}
@@ -42,13 +44,13 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ overallScore, projectedScore = 
             cx="64"
             cy="64"
             r={radius}
-            stroke="#e2e8f0"
+            stroke="currentColor"
             strokeWidth={strokeWidth}
             fill="transparent"
             strokeDasharray={circumference}
             strokeDashoffset={potentialOffset}
             strokeLinecap="round"
-            className="opacity-50"
+            className="opacity-50 text-slate-200 dark:text-slate-600"
           />
 
           {/* Current Score */}
@@ -66,20 +68,20 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ overallScore, projectedScore = 
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-4xl font-bold text-slate-800">{overallScore}</span>
-          <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase mt-1">Score</span>
+          <span className="text-4xl font-bold text-slate-800 dark:text-slate-100">{overallScore}</span>
+          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 tracking-wider uppercase mt-1">Score</span>
         </div>
       </div>
       
       <div className="mt-4 w-full space-y-2">
-        <div className="flex justify-between text-xs text-slate-500 font-medium">
+        <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-medium">
            <span>Current: {overallScore}</span>
-           <span className="text-indigo-600">Potential: {projectedScore}</span>
+           <span className="text-indigo-600 dark:text-indigo-400">Potential: {projectedScore}</span>
         </div>
-        <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden relative">
+        <div className="h-2 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden relative">
            {/* Potential Bar */}
            <div 
-              className="absolute h-full rounded-full bg-indigo-100"
+              className="absolute h-full rounded-full bg-indigo-100 dark:bg-indigo-900/50"
               style={{ width: `${projectedScore}%` }}
            />
            {/* Current Bar */}
@@ -88,7 +90,7 @@ const ScoreChart: React.FC<ScoreChartProps> = ({ overallScore, projectedScore = 
               style={{ width: `${overallScore}%`, backgroundColor: color }}
            />
         </div>
-        <p className="text-center text-[10px] text-slate-400 mt-1">
+        <p className="text-center text-[10px] text-slate-400 dark:text-slate-500 mt-1">
           Fix issues to reach {projectedScore}
         </p>
       </div>

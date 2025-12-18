@@ -72,6 +72,7 @@ export interface User {
   email: string;
   picture: string;
   sub: string; // Google ID
+  exp?: number; // Expiration timestamp
 }
 
 export enum LoadingState {

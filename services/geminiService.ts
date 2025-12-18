@@ -1,12 +1,10 @@
+import { GoogleGenAI, Type, Chat } from "@google/genai";
+import { AnalysisResult, User } from "../types";
 
-import { GoogleGenAI, Type, Schema, Chat } from "@google/genai";
-import { AnalysisResult } from "../types";
+// Always use a named parameter for apiKey initialization and use process.env.API_KEY directly.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-const apiKey = process.env.API_KEY;
-// Initialize conditionally to prevent immediate crash if key is missing, check at runtime
-const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
-
-const analysisSchema: Schema = {
+const analysisSchema = {
   type: Type.OBJECT,
   properties: {
     overallScore: { type: Type.NUMBER, description: "Total ATS score from 0-100 based on current resume" },
@@ -109,15 +107,16 @@ const analysisSchema: Schema = {
   required: ["overallScore", "projectedScore", "personalInfo", "breakdown", "skills", "improvements", "rewrittenResume", "coverLetter", "cultureFit"],
 };
 
-export const analyzeResume = async (resumeText: string, jdText: string, companyName: string): Promise<AnalysisResult> => {
-  if (!apiKey || !ai) {
+// Fixed: Added User parameter to match the function call in App.tsx and resolve the argument count mismatch error.
+export const analyzeResume = async (resumeText: string, jdText: string, companyName: string, user?: User): Promise<AnalysisResult> => {
+  if (!process.env.API_KEY) {
     throw new Error("Configuration Error: Google API Key is missing. Please check your environment variables.");
   }
 
-  const model = "gemini-2.5-flash";
+  const model = "gemini-3-pro-preview";
   
   const systemInstruction = `
-    You are an expert ATS Resume Optimizer and Corporate Culture Analyst. Your goal is to help the candidate achieve a **95% or higher** match score.
+    You are an expert ATS Resume Optimizer and Corporate Culture Analyst. Your goal is to help the candidate${user ? ` (${user.name})` : ''} achieve a **95% or higher** match score.
 
     PROCESS:
     1. **Company Culture Analysis**: 
@@ -157,9 +156,13 @@ export const analyzeResume = async (resumeText: string, jdText: string, companyN
          - **Missing Keywords**: Suggest integration strategies.
          - **Formatting**: Suggest standardizing headers.
          
-    7. **Rewrite**: The 'rewrittenResume' must be a complete overhaul that incorporates ALL fixes to theoretically achieve that 95% score.
+    7. **Rewrite**: The 'rewrittenResume' must be a high-scoring version that STRICTLY PRESERVES the candidate's structure.
+       - **STRUCTURE LOCK**: You MUST keep the same **Professional Summary** and the exact **Professional Experience** list (Company Names, Job Titles, Dates). Do NOT add new roles, delete existing ones, or rewrite the Summary narrative.
+       - **BULLET POINT OPTIMIZATION**: Your PRIMARY task is to **add, update, or edit the bullet points** within the existing roles.
+       - **ENHANCEMENTS**: Transform weak bullet points into high-impact statements using **metrics**, **action verbs**, and **critical keywords** from the JD.
+       - **FORMAT**: Ensure standard, clean ATS formatting (headers, bullet points) while keeping the original content sections.
     
-    IMPORTANT: In the 'rewrittenResume', TRY to respect the candidate's original structure where possible, but prioritize standard ATS formatting (Clean headers, no columns) if the original is messy.
+    IMPORTANT: The goal is to optimize the *descriptions* (bullet points) to score 95%, without altering the candidate's core identity or summary.
 
     OUTPUT: Return ONLY a valid JSON object matching the schema.
   `;
@@ -193,7 +196,7 @@ export const analyzeResume = async (resumeText: string, jdText: string, companyN
     
     return JSON.parse(response.text) as AnalysisResult;
   } catch (error: any) {
-    console.error("FAANG Resume IQ Analysis Error:", error);
+    console.error("Apply IQ Analysis Error:", error);
     
     if (error.message?.includes("429") || error.status === 429) {
       throw new Error("High traffic volume. The AI service is currently busy. Please wait a minute and try again.");
@@ -212,8 +215,68 @@ export const analyzeResume = async (resumeText: string, jdText: string, companyN
   }
 };
 
+const validationSchema = {
+  type: Type.OBJECT,
+  properties: {
+    isValidResume: { type: Type.BOOLEAN, description: "True if the text appears to be a resume/CV." },
+    formattedContent: { type: Type.STRING, description: "The content reformatted into clean, structured Markdown (headers, bullets)." },
+    reason: { type: Type.STRING, description: "Explanation of why it is or isn't considered a valid resume." }
+  },
+  required: ["isValidResume", "formattedContent", "reason"]
+};
+
+export const validateAndFormatResume = async (text: string): Promise<{ isValidResume: boolean; formattedContent: string; reason: string }> => {
+  if (!process.env.API_KEY) {
+    throw new Error("Configuration Error: API Key is missing.");
+  }
+
+  const model = "gemini-3-flash-preview";
+  const systemInstruction = `
+    You are a Resume Validation and Formatting Engine.
+    
+    TASK:
+    1. **VALIDATION**: Analyze the provided text. Determine if it is a Resume or CV.
+       - A valid resume typically contains sections like: "Experience", "Education", "Skills", "Contact Info", "Summary".
+       - If it looks like a Job Description, a Recipe, a generic article, or random noise, mark 'isValidResume' as FALSE.
+    
+    2. **FORMATTING**: If it IS a resume, reformat the raw text into clean, professional **Markdown**.
+       - **Clean Up**: Fix broken line breaks (often caused by PDF parsing).
+       - **Structure**: Ensure clear Headers (## Experience), bold Job Titles, and properly bulleted lists.
+       - **Preserve**: Do NOT change the content, facts, dates, or names. Only fix the layout/formatting.
+       - If it is NOT a resume, return the original text in 'formattedContent'.
+
+    OUTPUT: JSON matching the schema.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json",
+        responseSchema: validationSchema,
+      },
+      contents: [{ role: "user", parts: [{ text }] }],
+    });
+
+    if (!response.text) {
+      throw new Error("Empty response from AI");
+    }
+
+    return JSON.parse(response.text);
+  } catch (error) {
+    console.error("Resume Validation Error:", error);
+    // Fallback: assume it might be valid if AI fails, but don't format it heavily
+    return {
+      isValidResume: true,
+      formattedContent: text,
+      reason: "AI validation unavailable, proceeding with raw text."
+    };
+  }
+};
+
 export const createChatSession = (resumeText: string, jdText: string, analysisResult: AnalysisResult | null): Chat => {
-  if (!apiKey || !ai) {
+  if (!process.env.API_KEY) {
     throw new Error("Configuration Error: API Key is missing.");
   }
 
@@ -239,26 +302,21 @@ export const createChatSession = (resumeText: string, jdText: string, analysisRe
   `;
 
   return ai.chats.create({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3-pro-preview',
     config: {
-      systemInstruction: `You are the FAANG Resume IQ Copilot. Your goal is to rewrite the resume to reach a 95%+ ATS score, BUT you must strictly preserve the candidate's identity, career history structure, and original formatting.
+      systemInstruction: `You are the Apply IQ Copilot. Your goal is to rewrite the resume to reach a 95%+ ATS score, BUT you must strictly preserve the candidate's identity, career history structure, and professional summary.
 
       STRICT PRESERVATION RULES:
       1. **IDENTITY LOCK**: NEVER change the candidate's Name, Email, Phone number, LinkedIn URL, or Location. Use the exact details provided in the IMMUTABLE PERSONAL DETAILS section.
-      2. **HISTORY LOCK**: NEVER change Company Names, Job Titles, or Dates of Employment. You can only improve the *bullet points* under these roles.
-      3. **FORMAT & STRUCTURE LOCK (CRITICAL)**: 
-         - **Do NOT reorder sections.** If "Experience" comes before "Skills", keep it that way.
-         - **Do NOT rename headers.** If the user uses "Work History", do NOT change it to "Experience".
-         - **Do NOT change the layout style.** Keep indentation and bullet styles consistent with the original input.
-         - Your job is to improve the *content* (keywords, metrics, verbs) INSIDE the existing scaffold, not to redesign the document.
+      2. **HISTORY LOCK**: NEVER change Company Names, Job Titles, or Dates of Employment.
+      3. **SUMMARY LOCK**: Keep the Professional Summary text substantially the same. Do not rewrite the narrative unless explicitly asked.
 
       OPTIMIZATION RULES (WHAT TO CHANGE):
-      1. **Summary**: Rewrite the professional summary to align with the JD keywords and Company Culture.
-      2. **Bullet Points**: Rewrite experience bullet points to include:
+      1. **Bullet Points**: This is the ONLY place for major changes. Rewrite experience bullet points to include:
          - **Hard Skills** from the JD (e.g. Python, GenAI).
          - **Metrics**: Add numbers (%, $, count) to quantify impact.
          - **Action Verbs**: Use strong leadership verbs.
-      3. **Skills Section**: Add missing critical keywords to the existing Skills section list.
+      2. **Skills Section**: Add missing critical keywords to the existing Skills section list.
 
       OUTPUT PROTOCOL:
       1. **Single Best Option**: Provide the single best version.
@@ -273,4 +331,41 @@ export const createChatSession = (resumeText: string, jdText: string, analysisRe
       ${context}`,
     },
   });
+};
+
+export const quickFixResume = async (text: string): Promise<string> => {
+  if (!process.env.API_KEY) {
+    throw new Error("Configuration Error: API Key is missing.");
+  }
+  
+  const model = "gemini-3-flash-preview";
+  const systemInstruction = `
+    You are an expert editor. Your task is to fix grammar, spelling, punctuation, and improve conciseness in the provided resume text.
+    
+    RULES:
+    1. **Preserve Structure**: Do NOT change Markdown formatting, bullet points, headers, or the order of sections.
+    2. **Conciseness**: Remove fluff words but keep the original metrics and keywords.
+    3. **Grammar**: Fix all typos and grammar errors.
+    4. **Output**: Return ONLY the corrected text. Do NOT wrap in markdown code blocks like \`\`\`markdown. Just return the raw text.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      config: {
+        systemInstruction,
+      },
+      contents: [{ role: "user", parts: [{ text }] }],
+    });
+    
+    let fixedText = response.text || text;
+    
+    // Cleanup if model adds code blocks despite instructions
+    fixedText = fixedText.replace(/^```markdown\n/, '').replace(/^```\n/, '').replace(/\n```$/, '');
+    
+    return fixedText;
+  } catch (error) {
+    console.error("Quick Fix Error:", error);
+    throw error;
+  }
 };

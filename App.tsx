@@ -1,24 +1,25 @@
-
-import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, ArrowRight, Copy, RefreshCw, AlertCircle, FileText, LayoutDashboard, ChevronRight, Star, MessageSquare, RotateCcw, History, Trash2, X, TrendingUp, LogOut, User as UserIcon, Download, Printer, FileJson, Building2, SplitSquareHorizontal } from 'lucide-react';
-import { analyzeResume } from './services/geminiService';
+import React, { useState, useEffect } from 'react';
+import { Sparkles, ArrowRight, FileText, Moon, Sun, CloudSnow, Building2, RotateCcw } from 'lucide-react';
+import { analyzeResume, validateAndFormatResume } from './services/geminiService';
 import { parseFile, validateDuplicateFile } from './services/fileParser';
-import { initGoogleAuth } from './services/authService';
-import { AnalysisResult, LoadingState, Improvement, HistoryItem, User } from './types';
-import ScoreChart from './components/ScoreChart';
-import ResultCard from './components/ResultCard';
-import MarkdownViewer from './components/MarkdownViewer';
+import { AnalysisResult, LoadingState, Improvement, HistoryItem } from './types';
 import InputArea from './components/InputArea';
 import ChatAssistant from './components/ChatAssistant';
 import LoadingScreen from './components/LoadingScreen';
-import ImprovementCard from './components/ImprovementCard';
-import ProfileSidebar from './components/ProfileSidebar';
-import Tooltip from './components/Tooltip';
-import FeedbackWidget from './components/FeedbackWidget';
-import ScoreBreakdownChart from './components/ScoreBreakdownChart';
-import OnboardingTour from './components/OnboardingTour';
 import TargetedResumeView from './components/TargetedResumeView';
 import Toast, { ToastType } from './components/Toast';
+import Snowfall from './components/Snowfall';
+import SantaHat from './components/SantaHat';
+import MarkdownViewer from './components/MarkdownViewer';
+
+const HISTORY_KEY = 'ats_optima_device_history';
+const DRAFT_RESUME_KEY = 'ats_optima_draft_resume';
+
+declare global {
+  interface Window {
+    html2pdf: any;
+  }
+}
 
 const App: React.FC = () => {
   const [companyName, setCompanyName] = useState('');
@@ -29,77 +30,88 @@ const App: React.FC = () => {
   const [status, setStatus] = useState<LoadingState>(LoadingState.IDLE);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [parsingFile, setParsingFile] = useState<string | null>(null);
+  const [isFormattingResume, setIsFormattingResume] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [user, setUser] = useState<User | null>(null);
-  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [errorState, setErrorState] = useState<{ message: string; type: ToastType } | null>(null);
+  const [isSnowing, setIsSnowing] = useState(false);
   
-  // Navigation State
-  const [activeSection, setActiveSection] = useState<'dashboard' | 'resume' | 'coverLetter'>('dashboard');
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ats_optima_theme');
+      if (saved) return saved as 'light' | 'dark';
+      return 'light';
+    }
+    return 'light';
+  });
 
-  // Chat Integration State
+  const [activeSection, setActiveSection] = useState<'dashboard' | 'resume' | 'coverLetter'>('dashboard');
   const [chatTriggerMessage, setChatTriggerMessage] = useState<string | undefined>(undefined);
-  
-  // Resume Diffing State
   const [previousResume, setPreviousResume] = useState<string | undefined>(undefined);
 
-  // Export Menu State
-  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
-
-  // Initialize Auth & History
   useEffect(() => {
-    // Load User
-    const savedUser = localStorage.getItem('ats_optima_user');
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch (e) {
-        console.error("Failed to parse user", e);
-      }
+    const root = window.document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
     }
+    localStorage.setItem('ats_optima_theme', theme);
+  }, [theme]);
 
-    // Initialize Google Auth (renders button if container exists)
-    initGoogleAuth((newUser) => {
-      setUser(newUser);
-      localStorage.setItem('ats_optima_user', JSON.stringify(newUser));
-      setIsProfileMenuOpen(false);
-      showToast(`Welcome back, ${newUser.name}!`, 'success');
-    });
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  };
 
-    // Load History
-    const savedHistory = localStorage.getItem('ats_optima_history');
+  const toggleSnow = () => {
+    setIsSnowing(prev => !prev);
+  };
+
+  useEffect(() => {
+    const savedHistory = localStorage.getItem(HISTORY_KEY);
     if (savedHistory) {
       try {
         setHistory(JSON.parse(savedHistory));
       } catch (e) {
         console.error("Failed to parse history", e);
+        setHistory([]);
       }
+    } else {
+      setHistory([]);
+    }
+
+    const savedDraft = localStorage.getItem(DRAFT_RESUME_KEY);
+    if (savedDraft && !resumeText) {
+      setResumeText(savedDraft);
     }
   }, []);
 
-  // Re-render Google Button when user state changes (if logged out)
   useEffect(() => {
-    if (!user) {
-      // Small delay to ensure DOM is ready
-      setTimeout(() => {
-         initGoogleAuth((newUser) => {
-          setUser(newUser);
-          localStorage.setItem('ats_optima_user', JSON.stringify(newUser));
-          showToast(`Welcome, ${newUser.name}!`, 'success');
-        });
-      }, 100);
-    }
-  }, [user]);
+    const handler = setTimeout(() => {
+      if (resumeText) {
+        localStorage.setItem(DRAFT_RESUME_KEY, resumeText);
+      } else {
+        localStorage.removeItem(DRAFT_RESUME_KEY);
+      }
+    }, 1000);
+    return () => clearTimeout(handler);
+  }, [resumeText]);
 
   const showToast = (message: string, type: ToastType = 'error') => {
     setErrorState({ message, type });
   };
 
-  const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem('ats_optima_user');
-    setIsProfileMenuOpen(false);
-    showToast("Signed out successfully", 'info');
+  const handleNewScan = () => {
+    setStatus(LoadingState.IDLE);
+    setResult(null);
+    setPreviousResume(undefined);
+    setJdFileName(null);
+    setResumeFileName(null);
+    setCompanyName('');
+    setJdText('');
+    setResumeText('');
+    setActiveSection('dashboard');
+    setChatTriggerMessage(undefined);
+    showToast("Application reset for new scan", 'info');
   };
 
   const saveToHistory = (newResult: AnalysisResult, jd: string, resume: string) => {
@@ -115,13 +127,18 @@ const App: React.FC = () => {
       fullResume: resume
     };
 
-    const updatedHistory = [newItem, ...history].slice(0, 5); // Keep last 5
+    const updatedHistory = [newItem, ...history].slice(0, 5);
     setHistory(updatedHistory);
-    localStorage.setItem('ats_optima_history', JSON.stringify(updatedHistory));
+    
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
+    } catch (e) {
+      const reducedHistory = updatedHistory.slice(0, 3);
+      setHistory(reducedHistory);
+    }
   };
 
   const loadHistoryItem = (item: HistoryItem) => {
-    // Confirmation before overwriting current state
     if (status !== LoadingState.IDLE && !window.confirm("You have unsaved changes or an active analysis. Are you sure you want to load this history item? Current progress will be lost.")) {
       return;
     }
@@ -130,7 +147,7 @@ const App: React.FC = () => {
     setJdText(item.fullJd || item.jdPreview);
     setResumeText(item.fullResume || item.resumePreview);
     setCompanyName(item.result.cultureFit?.companyName || '');
-    setJdFileName(null); // Clear filenames as it's loaded from text history
+    setJdFileName(null);
     setResumeFileName(null);
     setStatus(LoadingState.COMPLETE);
     setActiveSection('dashboard');
@@ -141,23 +158,36 @@ const App: React.FC = () => {
     e.stopPropagation();
     const updated = history.filter(h => h.id !== id);
     setHistory(updated);
-    localStorage.setItem('ats_optima_history', JSON.stringify(updated));
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
     showToast("Scan removed from history", 'info');
   };
 
-  const clearHistory = () => {
-    setHistory([]);
-    localStorage.removeItem('ats_optima_history');
-    showToast("History cleared", 'info');
+  const handleValidateAndFormat = async (text: string) => {
+    if (!text.trim()) return;
+    
+    setIsFormattingResume(true);
+    try {
+      const result = await validateAndFormatResume(text);
+      if (result.isValidResume) {
+        setResumeText(result.formattedContent);
+        showToast("Resume validated and formatted successfully", 'success');
+      } else {
+        setResumeText(text);
+        showToast(`Warning: This may not be a valid resume. ${result.reason}`, 'error');
+      }
+    } catch (error) {
+      setResumeText(text);
+      showToast("Smart formatting unavailable. Using raw text.", 'info');
+    } finally {
+      setIsFormattingResume(false);
+    }
   };
 
   const handleFileSelect = async (file: File, type: 'jd' | 'resume') => {
     setParsingFile(type);
     try {
-      // Check for duplicates
       const currentName = type === 'jd' ? jdFileName : resumeFileName;
       validateDuplicateFile(file, currentName);
-
       const text = await parseFile(file);
       
       if (type === 'jd') {
@@ -182,8 +212,6 @@ const App: React.FC = () => {
       return;
     }
     
-    // Company name is optional now, defaults handled in service if empty
-
     setStatus(LoadingState.ANALYZING);
     setResult(null);
     setPreviousResume(undefined);
@@ -194,118 +222,59 @@ const App: React.FC = () => {
       setStatus(LoadingState.COMPLETE);
       saveToHistory(data, jdText, resumeText);
     } catch (error) {
-      console.error(error);
       setStatus(LoadingState.ERROR);
       showToast((error as Error).message, 'error');
-      setTimeout(() => setStatus(LoadingState.IDLE), 2000);
+      setTimeout(() => setStatus(LoadingState.IDLE), 3000);
     }
   };
 
   const handleAutoRewrite = () => {
-    const prompt = "Please rewrite my entire resume to align perfectly with the Job Description and achieve a 95% ATS match score. Fix all keywords, metrics, and formatting.";
-    setChatTriggerMessage(prompt);
-    setTimeout(() => setChatTriggerMessage(undefined), 1000);
+    setChatTriggerMessage("ACTION_REWRITE_RESUME");
     setActiveSection('resume');
-    showToast("Auto-Rewrite initiated...", 'success');
   };
 
-  const handleFixRequest = (improvement: Improvement) => {
-    const prompt = `Help me fix the **${improvement.title}** issue in the **${improvement.section}** section. 
-    
-The recommendation was: "${improvement.recommendation}".
-
-Please rewrite this part of my resume to improve it.`;
-    
+  const handleFixRequest = (improvement: Improvement, context?: { before: string; after: string }) => {
+    let prompt = "";
+    if (context) {
+       prompt = `Apply this specific improvement: Find "${context.before}" and replace it with "${context.after}".`;
+    } else {
+       prompt = `Help me fix the ${improvement.title} issue in ${improvement.section}. Recommendation: ${improvement.recommendation}`;
+    }
     setChatTriggerMessage(prompt);
-    setTimeout(() => setChatTriggerMessage(undefined), 1000);
-    setActiveSection('resume'); // Switch to resume rewriter view
+    setActiveSection('resume');
   };
   
   const handleResumeUpdate = (newResumeContent: string) => {
     if (result) {
-      // Save the current version as "previous" before updating
       setPreviousResume(result.rewrittenResume);
-      
-      setResult({
-        ...result,
-        rewrittenResume: newResumeContent
-      });
+      setResult({ ...result, rewrittenResume: newResumeContent });
     }
   };
   
   const handleScoreUpdate = (newScore: number) => {
     if (result) {
-        setResult({
-            ...result,
-            overallScore: newScore
-        });
+        setResult({ ...result, overallScore: newScore });
     }
   };
 
-  // Helper to download text files
-  const downloadFile = (content: string, filename: string, type: string) => {
-    const blob = new Blob([content], { type });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    setIsExportMenuOpen(false);
-    showToast(`Downloaded ${filename}`, 'success');
-  };
-
-  // Helper to generate and download a Word-compatible DOC file
-  const handleDownloadDoc = () => {
-    if (!result) return;
-    
-    // Basic HTML wrapper to ensure formatting in Word
-    const htmlContent = `
-      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-      <head>
-        <meta charset='utf-8'>
-        <title>Optimized Resume</title>
-        <style>
-          body { font-family: Calibri, sans-serif; font-size: 11pt; }
-          h1 { font-size: 16pt; font-weight: bold; }
-          h2 { font-size: 14pt; font-weight: bold; margin-top: 12pt; border-bottom: 1px solid #ddd; }
-          p { margin-bottom: 8pt; }
-          ul { margin-bottom: 8pt; }
-        </style>
-      </head>
-      <body>
-        ${result.rewrittenResume
-          .replace(/\n/g, '<br/>')
-          .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') // Bold
-          .replace(/# (.*?)(<br\/>|$)/g, '<h1>$1</h1>') // H1
-          .replace(/## (.*?)(<br\/>|$)/g, '<h2>$1</h2>') // H2
-          .replace(/- (.*?)(<br\/>|$)/g, '<li>$1</li>')}
-      </body>
-      </html>
-    `;
-    
-    const blob = new Blob(['\ufeff', htmlContent], {
-      type: 'application/msword'
+  const handleDownloadPdf = () => {
+    const element = document.getElementById('printable-resume-area');
+    if (!element || !window.html2pdf) {
+      window.print();
+      return;
+    }
+    const opt = {
+      margin: 10,
+      filename: `${result?.personalInfo.name || 'Optimized'}_Resume.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+    element.style.display = 'block';
+    window.html2pdf().from(element).set(opt).save().then(() => {
+      element.style.display = '';
+      showToast("PDF Downloaded", 'success');
     });
-    
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'Optimized_Resume.doc';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    
-    setIsExportMenuOpen(false);
-    showToast("Downloaded as Word Document", 'success');
-  };
-
-  const handlePrint = () => {
-    setIsExportMenuOpen(false);
-    window.print();
   };
 
   if (status === LoadingState.ANALYZING) {
@@ -313,319 +282,132 @@ Please rewrite this part of my resume to improve it.`;
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-      {/* Print Styles & Print Only Content */}
-      <style>{`
-        @media print {
-          body * {
-            visibility: hidden;
-            height: 0;
-            overflow: hidden;
-          }
-          #printable-resume-area, #printable-resume-area * {
-            visibility: visible;
-            height: auto;
-            overflow: visible;
-          }
-          #printable-resume-area {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            margin: 0;
-            padding: 40px;
-            background: white;
-            color: black;
-            font-size: 12pt;
-          }
-          /* Hide highlights for clean print */
-          #printable-resume-area .bg-indigo-50 {
-             background-color: transparent !important;
-             border-left: none !important;
-             padding-left: 0 !important;
-             margin-left: 0 !important;
-          }
-          #printable-resume-area .bg-emerald-100 {
-             background-color: transparent !important;
-             border: none !important;
-          }
-        }
-      `}</style>
-
-      {/* Hidden Printable Area - Contains Latest Rewritten Resume */}
-      <div id="printable-resume-area" className="hidden">
-        {result && (
-           <MarkdownViewer 
-              content={result.rewrittenResume || ""} 
-           />
-        )}
+    <div className="min-h-screen bg-slate-50 dark:bg-[#1A1A1A] font-sans text-slate-900 dark:text-slate-200 relative overflow-x-hidden transition-colors duration-300">
+      {isSnowing && <Snowfall />}
+      
+      <div id="printable-resume-area" className="hidden print:block font-sans bg-white text-black">
+        {result && <MarkdownViewer content={result.rewrittenResume || ""} />}
       </div>
 
-      {/* Toast Notification Container */}
       {errorState && (
-        <Toast 
-          message={errorState.message} 
-          type={errorState.type}
-          onClose={() => setErrorState(null)} 
-        />
+        <Toast message={errorState.message} type={errorState.type} onClose={() => setErrorState(null)} />
       )}
 
-      {/* Conditional Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 print:hidden">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setStatus(LoadingState.IDLE)}>
-            <div className="bg-indigo-600 p-1.5 rounded-lg">
+      <header className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/10 sticky top-0 z-30 print:hidden transition-colors">
+        <div className="max-w-[1600px] mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2 cursor-pointer" onClick={handleNewScan}>
+            <div className="bg-gradient-to-r from-blue-600 to-violet-600 p-1.5 rounded-lg shadow-lg">
               <Sparkles className="w-5 h-5 text-white" />
             </div>
-            <h1 className="text-xl font-bold text-slate-800 tracking-tight">FAANG Resume IQ</h1>
+            <h1 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">
+              <span className="relative">A<SantaHat className="absolute -top-[0.9rem] -left-[0.85rem] w-9 h-9" /></span>pply IQ
+            </h1>
           </div>
           
           {status === LoadingState.COMPLETE && (
-             <div className="hidden md:flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
-                <button 
-                  onClick={() => setActiveSection('dashboard')}
-                  className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeSection === 'dashboard' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-600 hover:text-slate-900'}`}
-                >
-                  Dashboard
-                </button>
-                <button 
-                  onClick={() => setActiveSection('resume')}
-                  className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeSection === 'resume' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-600 hover:text-slate-900'}`}
-                >
-                  Resume Rewriter
-                </button>
+             <div className="hidden md:flex items-center gap-1 bg-slate-100 dark:bg-white/5 p-1 rounded-lg">
+                <button onClick={() => setActiveSection('dashboard')} className={`px-4 py-1.5 rounded-md text-sm font-medium ${activeSection === 'dashboard' ? 'bg-white dark:bg-white/10 text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Dashboard</button>
+                <button onClick={() => setActiveSection('resume')} className={`px-4 py-1.5 rounded-md text-sm font-medium ${activeSection === 'resume' ? 'bg-white dark:bg-white/10 text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Rewriter</button>
              </div>
           )}
           
           <div className="flex items-center gap-4">
-             {status === LoadingState.COMPLETE && (
-               <div className="flex items-center gap-4">
-                 <div className="hidden sm:block">
-                   <FeedbackWidget />
-                 </div>
-                 <div className="h-6 w-px bg-slate-200 hidden sm:block" />
-                 <Tooltip content="Start a new analysis" position="left">
-                   <button 
-                     onClick={() => { 
-                        if (window.confirm("Start a new scan? Current results will be saved to history.")) {
-                          setStatus(LoadingState.IDLE); setResult(null); setPreviousResume(undefined); 
-                          setJdFileName(null); setResumeFileName(null); setCompanyName('');
-                          setJdText(''); setResumeText('');
-                        }
-                     }}
-                     className="text-sm text-slate-500 hover:text-indigo-600 flex items-center gap-1.5 font-medium"
-                   >
-                     <RefreshCw className="w-4 h-4" />
-                     New Scan
-                   </button>
-                 </Tooltip>
-                 <OnboardingTour />
-                 <div className="h-6 w-px bg-slate-200 hidden sm:block" />
-               </div>
-             )}
-
-             {/* User Auth Section */}
-             {user ? (
-               <div className="relative">
-                 <button 
-                   onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                   className="flex items-center gap-2 hover:bg-slate-50 p-1.5 rounded-full pr-3 transition-colors border border-transparent hover:border-slate-200"
-                 >
-                   {user.picture ? (
-                     <img src={user.picture} alt={user.name} className="w-8 h-8 rounded-full border border-slate-200" />
-                   ) : (
-                     <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs">
-                       {user.name.charAt(0)}
-                     </div>
-                   )}
-                   <span className="text-sm font-medium text-slate-700 hidden md:block">{user.name.split(' ')[0]}</span>
-                 </button>
-
-                 {isProfileMenuOpen && (
-                   <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 py-2 animate-in fade-in zoom-in-95 duration-200">
-                     <div className="px-4 py-2 border-b border-slate-50 mb-1">
-                       <p className="text-sm font-bold text-slate-800 truncate">{user.name}</p>
-                       <p className="text-xs text-slate-500 truncate">{user.email}</p>
-                     </div>
-                     <button 
-                       onClick={handleLogout}
-                       className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
-                     >
-                       <LogOut className="w-4 h-4" /> Sign Out
-                     </button>
-                   </div>
-                 )}
-               </div>
-             ) : (
-               <div id="google-signin-btn" className="h-10"></div>
-             )}
+             <button onClick={toggleSnow} className={`p-2 rounded-full ${isSnowing ? 'text-blue-400' : 'text-slate-500'}`} title="Toggle Snowfall"><CloudSnow className="w-5 h-5" /></button>
+             <button onClick={toggleTheme} className="p-2 text-slate-500" title="Toggle Dark Mode">{theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}</button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 print:hidden">
-        
-        {/* Input Mode */}
+      <main className="max-w-[1600px] mx-auto px-4 py-8 print:hidden relative z-10">
         {status !== LoadingState.COMPLETE && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-             <div className="text-center mb-10 max-w-3xl mx-auto">
-              <h2 className="text-3xl font-bold text-slate-900 mb-3">FAANG Resume IQ</h2>
-              <p className="text-slate-600 text-lg">
-                Upload your resume and the job description to get a detailed match score and actionable fixes.
-              </p>
+            <div className="text-center mb-10 max-w-3xl mx-auto flex flex-col items-center">
+              {/* Removed the Sparkles icon box as requested */}
+              <h2 className="text-5xl font-extrabold mb-3 tracking-tight text-slate-900 dark:text-white">
+                <span className="relative inline-block">
+                  A
+                  <SantaHat className="absolute -top-[1.6rem] -left-[1.4rem] w-16 h-16 pointer-events-none" />
+                </span>
+                pply IQ
+              </h2>
+              <p className="text-indigo-600 dark:text-indigo-400 text-xl font-bold tracking-tight mb-2 uppercase text-[12px] px-4 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/30 inline-block">Built to pass the ATS. Designed to pass the bar.</p>
+              <p className="text-slate-500 dark:text-slate-400 max-w-xl mx-auto font-medium">Upload your resume and JD for FAANG-level optimization and an instant recruiter score</p>
             </div>
 
             <div className="max-w-2xl mx-auto mb-8">
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                   <div className="flex items-center justify-between mb-2">
-                       <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
-                          <Building2 className="w-4 h-4 text-indigo-600" />
-                          Target Company
-                       </label>
-                       <span className="text-xs text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded-full">Optional</span>
-                   </div>
-                   <input 
-                     type="text" 
-                     value={companyName}
-                     onChange={(e) => setCompanyName(e.target.value)}
-                     placeholder="Enter Company Name (e.g. Amazon, Google, Netflix)..."
-                     className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none text-slate-800 placeholder-slate-400 font-medium transition-all"
-                   />
-                   <p className="text-xs text-slate-500 mt-2 ml-1">We'll analyze cultural fit based on this company's known values.</p>
+              <div className="bg-white/80 dark:bg-white/5 p-5 rounded-2xl border-4 border-indigo-500/30 dark:border-indigo-500/50 shadow-2xl backdrop-blur-xl ring-4 ring-indigo-500/10 transition-colors">
+                <div className="flex items-center justify-between mb-3">
+                  <label className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300">
+                    <Building2 className="w-4 h-4 text-indigo-600" /> Target Company
+                  </label>
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Optional</span>
                 </div>
+                <input 
+                  value={companyName} 
+                  onChange={(e) => setCompanyName(e.target.value)} 
+                  placeholder="Enter Company Name (e.g. Amazon, Google, Netflix)..." 
+                  className="w-full px-5 py-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-slate-800 dark:text-indigo-300 placeholder:text-slate-400 dark:placeholder:text-slate-600" 
+                />
+                <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 font-medium italic">We'll analyze cultural fit based on this company's known values.</p>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
-              <InputArea 
-                type="jd"
-                value={jdText}
-                onChange={setJdText}
-                onFileSelect={(file) => handleFileSelect(file, 'jd')}
-                parsing={parsingFile === 'jd'}
-              />
-              <InputArea 
-                type="resume"
-                value={resumeText}
-                onChange={setResumeText}
-                onFileSelect={(file) => handleFileSelect(file, 'resume')}
-                parsing={parsingFile === 'resume'}
-              />
+              <InputArea type="jd" value={jdText} onChange={setJdText} onFileSelect={(file) => handleFileSelect(file, 'jd')} parsing={parsingFile === 'jd'} />
+              <InputArea type="resume" value={resumeText} onChange={setResumeText} onFileSelect={(file) => handleFileSelect(file, 'resume')} parsing={parsingFile === 'resume'} formatting={isFormattingResume} onAutoFormat={() => handleValidateAndFormat(resumeText)} />
             </div>
 
-            <div className="flex justify-center mb-16 relative z-10">
-              <Tooltip content="Start AI Analysis" position="top">
-               <button
-                  onClick={handleAnalyze}
-                  disabled={!jdText || !resumeText || !!parsingFile}
-                  className="
-                    flex items-center gap-2 px-10 py-4 rounded-xl font-bold text-lg shadow-xl shadow-indigo-500/20 transition-all transform hover:scale-105 hover:shadow-indigo-500/40
-                    bg-indigo-600 text-white disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none disabled:cursor-not-allowed ring-4 ring-indigo-50
-                  "
-                >
-                  <Sparkles className="w-5 h-5" />
-                  Scan & Optimize
-                  <ArrowRight className="w-5 h-5" />
+            <div className="flex justify-center mb-16">
+               <button onClick={handleAnalyze} disabled={!jdText || !resumeText} className="flex items-center gap-3 px-12 py-5 rounded-2xl font-bold text-xl shadow-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white disabled:opacity-40 hover:scale-[1.03] active:scale-95 transition-all group">
+                  <Sparkles className="w-6 h-6 group-hover:animate-pulse" /> Scan & Optimize <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
                 </button>
-              </Tooltip>
             </div>
-
-            {/* Recent Scans (Input Mode) */}
-            {history.length > 0 && (
-              <div className="max-w-4xl mx-auto mb-12 border-t border-slate-200 pt-8">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                    <History className="w-4 h-4" /> Recent Scans
-                  </h3>
-                  <button onClick={clearHistory} className="text-xs text-red-500 hover:underline flex items-center gap-1">
-                    <Trash2 className="w-3 h-3" /> Clear All
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {history.map((item) => (
-                    <div 
-                      key={item.id}
-                      onClick={() => loadHistoryItem(item)}
-                      className="bg-white p-4 rounded-xl border border-slate-200 hover:border-indigo-400 hover:shadow-md cursor-pointer transition-all group relative flex flex-col"
-                    >
-                      <div className="flex justify-between items-start mb-2 gap-4">
-                        <span className="font-bold text-slate-800 group-hover:text-indigo-700 truncate">{item.role}</span>
-                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full shrink-0 ${item.score >= 70 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                          {item.score}% Match
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between mt-auto pt-2 border-t border-slate-50">
-                         <p className="text-xs text-slate-400">{item.date}</p>
-                         <span className="text-xs font-medium text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                            View Results <ArrowRight className="w-3 h-3" />
-                         </span>
-                      </div>
-                      
-                      {/* Delete Button */}
-                      <button 
-                        onClick={(e) => deleteHistoryItem(item.id, e)}
-                        className="absolute -top-2 -right-2 bg-white p-1 text-slate-300 hover:text-red-500 shadow-sm border border-slate-100 rounded-full opacity-0 group-hover:opacity-100 transition-all"
-                        title="Remove from history"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
 
-        {/* Dashboard Mode - Targeted View */}
         {status === LoadingState.COMPLETE && result && activeSection === 'dashboard' && (
            <TargetedResumeView 
-             result={result}
-             onReEvaluate={() => { setStatus(LoadingState.IDLE); setResult(null); setPreviousResume(undefined); setJdFileName(null); setResumeFileName(null); setCompanyName(''); setJdText(''); setResumeText(''); }}
-             history={history}
-             onLoadHistory={loadHistoryItem}
-             onDeleteHistory={deleteHistoryItem}
-             onNavigateToRewriter={() => setActiveSection('resume')}
-             onAutoRewrite={handleAutoRewrite}
-             onFixRequest={handleFixRequest}
-             jdText={jdText}
-             resumeText={resumeText}
-           />
+            result={result} 
+            onReEvaluate={handleNewScan} 
+            history={history} 
+            onLoadHistory={loadHistoryItem} 
+            onDeleteHistory={deleteHistoryItem} 
+            onNavigateToRewriter={() => setActiveSection('resume')} 
+            onAutoRewrite={handleAutoRewrite} 
+            onFixRequest={handleFixRequest} 
+            jdText={jdText} 
+            resumeText={resumeText} 
+            previousResume={previousResume} 
+            onUpdateResume={handleResumeUpdate} 
+            onDownloadPdf={handleDownloadPdf} 
+          />
         )}
 
-        {/* Resume Rewriter Mode - FAANG Copilot Only */}
         {status === LoadingState.COMPLETE && result && activeSection === 'resume' && (
-           <div className="h-[calc(100vh-140px)] max-w-6xl mx-auto">
-              <div className="w-full h-full flex flex-col">
-                 <div className="flex items-center justify-between mb-2">
-                   <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                     <Sparkles className="w-5 h-5 text-indigo-600" />
-                     Resume Rewriter & Copilot
-                   </h2>
-                   <div className="flex gap-2">
-                      <button 
-                        onClick={handleAutoRewrite}
-                        className="text-xs flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 font-bold transition-colors"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        Rewrite Full Resume (95%)
-                      </button>
+           <div className="h-[calc(100vh-140px)] max-w-6xl mx-auto flex flex-col">
+              <div className="w-full flex-1 flex flex-col">
+                 <div className="flex items-center justify-between mb-4 px-2">
+                   <h2 className="text-xl font-bold flex items-center gap-2"><Sparkles className="w-6 h-6 text-indigo-600" /> Resume Rewriter & Copilot</h2>
+                   <div className="flex items-center gap-2">
+                      <button onClick={() => setActiveSection('dashboard')} className="text-sm px-4 py-2 text-slate-500 hover:text-slate-800 font-bold">Back to Dashboard</button>
+                      <button onClick={handleAutoRewrite} className="text-sm px-4 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 font-bold">Full Re-optimization</button>
                    </div>
                  </div>
                  <ChatAssistant 
-                    jdText={jdText} 
-                    resumeText={resumeText} 
-                    analysisResult={result} 
-                    variant="sidebar"
-                    triggerMessage={chatTriggerMessage}
-                    onUpdateResume={handleResumeUpdate}
-                    onUpdateScore={handleScoreUpdate}
-                    onDownloadPdf={handlePrint}
-                    onDownloadDoc={handleDownloadDoc}
-                 />
+                  jdText={jdText} 
+                  resumeText={resumeText} 
+                  analysisResult={result} 
+                  variant="sidebar" 
+                  triggerMessage={chatTriggerMessage} 
+                  onClearTrigger={() => setChatTriggerMessage(undefined)} 
+                  onUpdateResume={handleResumeUpdate} 
+                  onUpdateScore={handleScoreUpdate} 
+                  onDownloadPdf={handleDownloadPdf} 
+                  onNewScan={handleNewScan}
+                />
               </div>
            </div>
         )}
-
       </main>
     </div>
   );

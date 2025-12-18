@@ -71,6 +71,12 @@ const readTextFile = (file: File): Promise<string> => {
   });
 };
 
+/**
+ * Robust PDF Parsing Strategy:
+ * Instead of simple text extraction which often fails on columns (reading left-right across columns),
+ * we categorize text items by their Y-coordinate (vertical position) to identify lines,
+ * and then sort by X-coordinate (horizontal position) within those lines.
+ */
 const parsePdf = async (file: File): Promise<string> => {
   if (!window.pdfjsLib) throw new Error("System Error: PDF parser (PDF.js) failed to load. Please refresh the page.");
   
@@ -84,10 +90,51 @@ const parsePdf = async (file: File): Promise<string> => {
     if (pdf.numPages === 0) throw new Error("This PDF has no pages.");
 
     let fullText = '';
+    
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const textContent = await page.getTextContent();
-      const pageText = textContent.items.map((item: any) => item.str).join(' ');
+      
+      // Advanced Sorting Logic for Columns/Tables
+      const items = textContent.items.map((item: any) => ({
+        str: item.str,
+        // PDF coordinates: (0,0) is bottom-left. 
+        // transform[4] is X, transform[5] is Y.
+        x: item.transform[4],
+        y: item.transform[5],
+        height: item.height || 0
+      }));
+
+      // Group items into lines based on Y-coordinate tolerance
+      // Items on the "same line" usually vary slightly in Y due to fonts/rendering
+      const LINE_TOLERANCE = 5; 
+      const lines: { y: number; items: typeof items }[] = [];
+
+      items.forEach((item: any) => {
+        // Find an existing line that matches this item's Y within tolerance
+        const line = lines.find(l => Math.abs(l.y - item.y) < LINE_TOLERANCE);
+        if (line) {
+          line.items.push(item);
+        } else {
+          lines.push({ y: item.y, items: [item] });
+        }
+      });
+
+      // 1. Sort lines Top-to-Bottom (PDF Y is 0 at bottom, so Descending Y)
+      lines.sort((a, b) => b.y - a.y);
+
+      // 2. Sort items within lines Left-to-Right (Ascending X)
+      lines.forEach(line => {
+        line.items.sort((a: any, b: any) => a.x - b.x);
+      });
+
+      // 3. Join text
+      const pageText = lines.map(line => {
+         // Join items in the line, adding space if X distance implies a space
+         // Simple join for now is usually sufficient after sorting
+         return line.items.map((item: any) => item.str).join(' ');
+      }).join('\n');
+
       fullText += pageText + '\n\n';
     }
     

@@ -57,7 +57,7 @@ const ImprovementCard: React.FC<ImprovementCardProps> = ({ improvement, onFix })
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-all duration-200 group">
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-all duration-200 group">
       <div 
         className="p-4 flex items-center justify-between cursor-pointer relative"
         onClick={() => setIsExpanded(!isExpanded)}
@@ -66,15 +66,15 @@ const ImprovementCard: React.FC<ImprovementCardProps> = ({ improvement, onFix })
         <div className="flex items-center gap-4 flex-1 min-w-0 mr-4">
           <div className={`
             p-2.5 rounded-xl flex items-center justify-center shrink-0 transition-colors relative
-            ${improvement.impact === 'High' ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-500'}
+            ${improvement.impact === 'High' ? 'bg-red-50 text-red-500 dark:bg-red-900/20 dark:text-red-400' : 'bg-amber-50 text-amber-500 dark:bg-amber-900/20 dark:text-amber-400'}
           `}>
             <AlertCircle className="w-5 h-5" />
           </div>
           <div className="min-w-0">
-            <h4 className="font-bold text-slate-800 group-hover:text-indigo-600 transition-colors truncate pr-2">
+            <h4 className="font-bold text-slate-800 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate pr-2">
               {improvement.title}
             </h4>
-            <p className="text-sm text-slate-500 line-clamp-1">
+            <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-1">
               {hasExamples ? intro : improvement.recommendation}
             </p>
           </div>
@@ -84,7 +84,7 @@ const ImprovementCard: React.FC<ImprovementCardProps> = ({ improvement, onFix })
         <div className="flex items-center gap-3 shrink-0">
            {/* Score Boost Badge */}
            {improvement.scoreBoost && (
-             <div className="hidden sm:flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">
+             <div className="hidden sm:flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2.5 py-1 rounded-lg border border-emerald-100 dark:border-emerald-800">
                 <TrendingUp className="w-3.5 h-3.5" />
                 +{improvement.scoreBoost} pts
              </div>
@@ -94,7 +94,7 @@ const ImprovementCard: React.FC<ImprovementCardProps> = ({ improvement, onFix })
              <button 
                onClick={handleFixClick}
                className="
-                 bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-100 hover:border-indigo-600
+                 bg-indigo-50 hover:bg-indigo-600 dark:bg-indigo-900/30 dark:hover:bg-indigo-600 text-indigo-700 dark:text-indigo-300 hover:text-white dark:hover:text-white border border-indigo-100 dark:border-indigo-800 hover:border-indigo-600
                  px-4 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5 transition-all shadow-sm
                "
              >
@@ -108,23 +108,23 @@ const ImprovementCard: React.FC<ImprovementCardProps> = ({ improvement, onFix })
       {/* Expanded Content */}
       {isExpanded && (
         <div className="px-4 pb-4 pl-4 sm:pl-[4.5rem] animate-in fade-in slide-in-from-top-1 duration-200">
-          <div className="text-sm text-slate-700 bg-slate-50/50 p-5 rounded-xl border border-slate-200 leading-relaxed">
+          <div className="text-sm text-slate-700 dark:text-slate-300 bg-slate-50/50 dark:bg-slate-900/30 p-5 rounded-xl border border-slate-200 dark:border-slate-700 leading-relaxed">
             
             {hasExamples ? (
               <div className="space-y-4">
-                {intro && <p className="text-slate-600 leading-relaxed pb-2">{intro}</p>}
+                {intro && <p className="text-slate-600 dark:text-slate-400 leading-relaxed pb-2">{intro}</p>}
                 
                 <div className="grid grid-cols-1 gap-4">
                    {/* Original (Before) */}
                    <div className="flex flex-col">
                       <div className="flex items-center gap-2 mb-2">
-                         <div className="bg-red-100 p-1 rounded-full">
-                            <X className="w-3 h-3 text-red-600" />
+                         <div className="bg-red-100 dark:bg-red-900/30 p-1 rounded-full">
+                            <X className="w-3 h-3 text-red-600 dark:text-red-400" />
                          </div>
-                         <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Original</span>
+                         <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Original</span>
                       </div>
-                      <div className="bg-white p-3 rounded-lg border border-red-100 text-slate-500 text-sm relative">
-                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-200 rounded-l-lg"></div>
+                      <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-red-100 dark:border-red-900/50 text-slate-500 dark:text-slate-400 text-sm relative">
+                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-200 dark:bg-red-800 rounded-l-lg"></div>
                         {before}
                       </div>
                    </div>
@@ -133,18 +133,18 @@ const ImprovementCard: React.FC<ImprovementCardProps> = ({ improvement, onFix })
                    <div className="flex flex-col">
                       <div className="flex items-center justify-between mb-2">
                          <div className="flex items-center gap-2">
-                            <div className="bg-emerald-100 p-1 rounded-full">
-                               <Check className="w-3 h-3 text-emerald-600" />
+                            <div className="bg-emerald-100 dark:bg-emerald-900/30 p-1 rounded-full">
+                               <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                             </div>
-                            <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Recommended Fix</span>
+                            <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">Recommended Fix</span>
                          </div>
                          <button 
                            onClick={handleCopy}
                            className={`
                              flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-md transition-all active:scale-95 border shadow-sm
                              ${copied 
-                               ? 'bg-emerald-100 text-emerald-700 border-emerald-200' 
-                               : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-700'}
+                               ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' 
+                               : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-600 hover:border-emerald-300 dark:hover:border-emerald-700 hover:text-emerald-700 dark:hover:text-emerald-400'}
                            `}
                            title="Copy recommendation"
                          >
@@ -152,19 +152,19 @@ const ImprovementCard: React.FC<ImprovementCardProps> = ({ improvement, onFix })
                             {copied ? 'Copied' : 'Copy'}
                          </button>
                       </div>
-                      <div className="bg-white p-4 rounded-lg border border-emerald-200 text-slate-800 text-sm font-medium relative shadow-sm">
-                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500 rounded-l-lg"></div>
+                      <div className="bg-white dark:bg-slate-800 p-4 rounded-lg border border-emerald-200 dark:border-emerald-900/50 text-slate-800 dark:text-slate-200 text-sm font-medium relative shadow-sm">
+                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500 dark:bg-emerald-600 rounded-l-lg"></div>
                         {after}
                       </div>
                    </div>
                 </div>
               </div>
             ) : (
-              <div className="prose prose-sm max-w-none text-slate-600">
+              <div className="prose prose-sm dark:prose-invert max-w-none text-slate-600 dark:text-slate-300">
                 <div className="flex items-center gap-2 mb-2">
-                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Recommendation</span>
+                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Recommendation</span>
                    {improvement.scoreBoost && (
-                     <span className="sm:hidden text-xs font-bold text-emerald-600 bg-emerald-100/50 px-2 py-0.5 rounded-full">
+                     <span className="sm:hidden text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100/50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full">
                        +{improvement.scoreBoost} pts
                      </span>
                    )}

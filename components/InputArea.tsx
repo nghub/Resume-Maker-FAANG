@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, DragEvent } from 'react';
-import { Upload, FileText, Cloud, HardDrive, AlertCircle, Briefcase, FileUser, CheckCircle2, Wand2, Loader2 } from 'lucide-react';
+import { Upload, FileText, Cloud, HardDrive, AlertCircle, Briefcase, FileUser, CheckCircle2, Wand2, BookMarked } from 'lucide-react';
 import { pickFromDrive, isDriveAvailable } from '../services/driveService';
 
 interface InputAreaProps {
@@ -11,16 +11,15 @@ interface InputAreaProps {
   parsing: boolean;
   formatting?: boolean;
   onAutoFormat?: () => void;
+  onOpenLibrary?: () => void;
 }
 
-const InputArea: React.FC<InputAreaProps> = ({ type, value, onChange, onFileSelect, parsing, formatting = false, onAutoFormat }) => {
+const InputArea: React.FC<InputAreaProps> = ({ type, value, onChange, onFileSelect, parsing, formatting = false, onAutoFormat, onOpenLibrary }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [driveError, setDriveError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isJD = type === 'jd';
-  
-  // Theme configurations with stronger distinction including Dark Mode
   const theme = {
     primary: isJD ? 'indigo' : 'emerald',
     step: isJD ? 'Step 1' : 'Step 2',
@@ -29,11 +28,9 @@ const InputArea: React.FC<InputAreaProps> = ({ type, value, onChange, onFileSele
       : 'bg-gradient-to-br from-emerald-50 via-white to-emerald-50/30 dark:from-emerald-900/20 dark:via-slate-800 dark:to-emerald-900/10',
     borderTop: isJD ? 'border-t-indigo-500' : 'border-t-emerald-500',
     border: isJD ? 'border-indigo-100 dark:border-indigo-900/30' : 'border-emerald-100 dark:border-emerald-900/30',
-    focusBorder: isJD ? 'focus:border-indigo-400 dark:focus:border-indigo-500' : 'focus:border-emerald-400 dark:focus:border-emerald-500',
     headerBorder: isJD ? 'border-indigo-100 dark:border-indigo-900/30' : 'border-emerald-100 dark:border-emerald-900/30',
     headerBg: isJD ? 'bg-indigo-50/50 dark:bg-indigo-900/20' : 'bg-emerald-50/50 dark:bg-emerald-900/20',
     text: isJD ? 'text-indigo-900 dark:text-indigo-200' : 'text-emerald-900 dark:text-emerald-200',
-    subText: isJD ? 'text-indigo-600/80 dark:text-indigo-400/80' : 'text-emerald-600/80 dark:text-emerald-400/80',
     iconColor: isJD ? 'text-indigo-600 dark:text-indigo-400' : 'text-emerald-600 dark:text-emerald-400',
     ring: isJD ? 'focus:ring-indigo-500/10 dark:focus:ring-indigo-500/20' : 'focus:ring-emerald-500/10 dark:focus:ring-emerald-500/20',
     uploadBtn: isJD 
@@ -44,89 +41,23 @@ const InputArea: React.FC<InputAreaProps> = ({ type, value, onChange, onFileSele
 
   const Icon = isJD ? Briefcase : FileUser;
   const title = isJD ? 'Job Description' : 'Your Resume';
-  const subtitle = isJD ? 'Paste the job posting here' : 'Paste or upload your resume';
-  const placeholder = isJD 
-    ? "Paste Job Description text here, or drag & drop a file..." 
-    : "Paste Resume text here, or drag & drop a PDF/DOCX...";
-
-  const handleDragEnter = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  };
-
-  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
+  
+  const handleDragEnter = (e: DragEvent<HTMLDivElement>) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); };
+  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); };
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      onFileSelect(files[0]);
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      onFileSelect(e.target.files[0]);
-    }
-  };
-
-  const triggerFileUpload = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleGoogleDrivePick = async () => {
-    setDriveError(null);
-    try {
-      try {
-        await pickFromDrive();
-      } catch (result: any) {
-        // The driveService throws an object { file: File } on success to pass the file object back
-        if (result.file) {
-          onFileSelect(result.file);
-        } else if (result.message) {
-            if (result.message.includes("Client ID")) {
-               setDriveError("Missing Google Client ID config.");
-            } else if (result.message !== "Selection cancelled") {
-               setDriveError("Drive selection failed.");
-            }
-        }
-      }
-    } catch (error) {
-      console.error("Drive Error:", error);
-      setDriveError("Failed to connect to Drive.");
-    }
+    e.preventDefault(); e.stopPropagation(); setIsDragging(false);
+    if (e.dataTransfer.files?.length > 0) onFileSelect(e.dataTransfer.files[0]);
   };
 
   return (
     <div 
-      className={`
-        relative rounded-2xl shadow-sm border-x border-b border-t-4 transition-all duration-300 h-[500px] flex flex-col overflow-hidden group
-        ${theme.gradient} ${theme.borderTop} ${theme.border}
-        ${isDragging ? `ring-4 ring-opacity-50 ${isJD ? 'ring-indigo-200 dark:ring-indigo-900' : 'ring-emerald-200 dark:ring-emerald-900'}` : 'hover:shadow-md dark:hover:shadow-none dark:hover:border-opacity-80'}
-      `}
-      onDragEnter={handleDragEnter}
-      onDragLeave={handleDragLeave}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
+      className={`relative rounded-2xl shadow-sm border-x border-b border-t-4 transition-all duration-300 h-[500px] flex flex-col overflow-hidden group ${theme.gradient} ${theme.borderTop} ${theme.border} ${isDragging ? 'ring-4 ring-indigo-500/30' : ''}`}
+      onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }} onDrop={handleDrop}
     >
-      {/* Header */}
       <div className={`px-6 py-5 border-b ${theme.headerBorder} ${theme.headerBg} flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors`}>
         <div className="flex items-center gap-4">
           <div className={`w-12 h-12 rounded-xl ${theme.iconBg} flex items-center justify-center shrink-0`}>
-            <Icon className={`w-6 h-6 ${theme.iconColor}`} />
+            <Icon className={`w-6 h-6 ${theme.iconColor}`} aria-hidden="true" />
           </div>
           <div>
             <div className="flex items-center gap-2 mb-0.5">
@@ -140,151 +71,69 @@ const InputArea: React.FC<InputAreaProps> = ({ type, value, onChange, onFileSele
         </div>
         
         <div className="flex items-center gap-2">
-          {/* Smart Format Button (Resume Only) */}
+          {!isJD && onOpenLibrary && (
+             <button
+               onClick={onOpenLibrary}
+               aria-label="Load from your resume library"
+               className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold border bg-white dark:bg-slate-800 border-indigo-200 dark:border-indigo-800 shadow-sm text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 transition-all active:scale-95 focus-visible:ring-2 focus-visible:ring-indigo-500"
+             >
+                <BookMarked className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">My Library</span>
+             </button>
+          )}
+
           {!isJD && onAutoFormat && value && !parsing && (
              <button
                onClick={onAutoFormat}
                disabled={formatting}
-               className="
-                 flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold border 
-                 bg-white dark:bg-slate-800 border-indigo-200 dark:border-indigo-800 shadow-sm text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all active:scale-95 disabled:opacity-50
-               "
-               title="Validate & Auto-Format Resume"
+               aria-label="Format your resume using AI"
+               className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold border bg-white dark:bg-slate-800 border-indigo-200 dark:border-indigo-800 shadow-sm text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 transition-all active:scale-95 disabled:opacity-50"
              >
                 <Wand2 className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Smart Format</span>
+                <span className="hidden sm:inline">Format</span>
              </button>
           )}
 
-          <input 
-            type="file" 
-            ref={fileInputRef}
-            className="hidden" 
-            accept=".txt,.md,.pdf,.docx" 
-            onChange={handleFileChange} 
-            disabled={parsing || formatting}
-          />
+          <input type="file" ref={fileInputRef} className="hidden" accept=".txt,.md,.pdf,.docx" onChange={(e) => e.target.files?.[0] && onFileSelect(e.target.files[0])} />
           
-          {/* Enhanced Upload Button */}
           <button
-            onClick={triggerFileUpload}
+            onClick={() => fileInputRef.current?.click()}
             disabled={parsing || formatting}
-            className={`
-              group/btn flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm 
-              transition-all duration-200 disabled:opacity-50 active:scale-95
-              ${theme.uploadBtn}
-            `}
-            title="Upload from Device"
+            className={`group/btn flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm transition-all active:scale-95 ${theme.uploadBtn}`}
           >
-             <div className={`p-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 group-hover/btn:scale-105 transition-transform`}>
-                <Upload className="w-3.5 h-3.5" />
-             </div>
-             <span className="mr-1">Upload</span>
+             <Upload className="w-3.5 h-3.5 group-hover/btn:scale-110 transition-transform" />
+             <span>Upload</span>
           </button>
 
-          {/* Google Drive Button - Only shown if configured */}
           {isDriveAvailable && (
             <button
-              onClick={handleGoogleDrivePick}
+              onClick={async () => { try { await pickFromDrive(); } catch(e: any) { if (e.file) onFileSelect(e.file); } }}
               disabled={parsing || formatting}
-              className="
-                group/drive flex items-center justify-center p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm
-                hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-200 dark:hover:border-blue-800 transition-all disabled:opacity-50
-              "
-              title="Select from Google Drive"
+              className="group/drive p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm hover:bg-blue-50 transition-all active:scale-95"
             >
-              <div className="w-4 h-4 relative flex items-center justify-center grayscale group-hover/drive:grayscale-0 transition-all">
-                  <HardDrive className="w-full h-full text-blue-600 dark:text-blue-400" /> 
-              </div>
+              <HardDrive className="w-4 h-4 text-blue-600 group-hover/drive:scale-110 transition-transform" />
             </button>
           )}
         </div>
       </div>
 
-      {/* Drive Error Toast */}
-      {driveError && (
-        <div className="absolute top-20 right-4 z-40 bg-red-50 dark:bg-red-900/80 text-red-600 dark:text-red-200 px-3 py-2 rounded-lg text-xs font-medium border border-red-100 dark:border-red-800 flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
-          <AlertCircle className="w-3.5 h-3.5" />
-          {driveError}
-          <button onClick={() => setDriveError(null)} className="ml-2 hover:bg-red-100 dark:hover:bg-red-800/50 p-0.5 rounded">×</button>
-        </div>
-      )}
-
-      {/* Content Area */}
       <div className="relative flex-1 flex flex-col">
         <textarea
-          className={`
-            flex-1 w-full p-6 resize-none focus:outline-none text-sm leading-relaxed text-slate-700 dark:text-slate-300 bg-transparent
-            ${theme.ring} focus:ring-2 focus:z-10 transition-shadow font-medium
-            placeholder:text-slate-400/70 dark:placeholder:text-slate-500/70
-            ${isDragging ? 'opacity-50' : 'opacity-100'}
-          `}
-          placeholder={placeholder}
+          className={`flex-1 w-full p-6 resize-none focus:outline-none text-sm leading-relaxed text-slate-700 dark:text-slate-300 bg-transparent ${theme.ring} focus:ring-2 font-medium placeholder:text-slate-400/70`}
+          placeholder={isJD ? "Paste JD here..." : "Paste Resume here..."}
+          aria-label={title}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           spellCheck={false}
         />
 
-        {/* Loading / Parsing Overlay */}
         {(parsing || formatting) && (
-          <div className="absolute inset-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-[2px] z-20 flex flex-col items-center justify-center animate-in fade-in duration-300">
-            <div className="relative mb-6">
-               {/* Document Icon */}
-               <div className={`w-16 h-20 border-2 ${isJD ? 'border-indigo-200 bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-900/30' : 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/30'} rounded-lg flex items-center justify-center overflow-hidden shadow-sm`}>
-                  {formatting ? (
-                     <Wand2 className={`w-8 h-8 ${isJD ? 'text-indigo-300 dark:text-indigo-500' : 'text-emerald-300 dark:text-emerald-500'} animate-pulse`} />
-                  ) : (
-                     <FileText className={`w-8 h-8 ${isJD ? 'text-indigo-300 dark:text-indigo-500' : 'text-emerald-300 dark:text-emerald-500'}`} />
-                  )}
-                  
-                  {/* Scanning Line */}
-                  <div className={`absolute w-full h-1 ${isJD ? 'bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]' : 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]'} top-0 animate-[scan_2s_ease-in-out_infinite]`} />
-               </div>
-            </div>
-
-            <div className="text-center space-y-1">
-              <p className="text-base font-bold text-slate-800 dark:text-slate-200">
-                 {formatting ? "Smart Formatting..." : "Parsing Document..."}
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                 {formatting ? "Standardizing layout & headers" : "Extracting text & structure"}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Drag Overlay Message */}
-        {isDragging && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
-             <div className="absolute inset-4 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm flex flex-col items-center justify-center text-center animate-in zoom-in-95 duration-200">
-              <div className={`p-3 rounded-full bg-white dark:bg-slate-700 shadow-md mb-3`}>
-                <Cloud className={`w-8 h-8 ${theme.iconColor}`} />
-              </div>
-              <h4 className="font-bold text-slate-800 dark:text-white text-lg">Drop file here</h4>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">We'll extract the text automatically</p>
-            </div>
-          </div>
-        )}
-
-        {/* Empty State Hint */}
-        {!value && !isDragging && !parsing && !formatting && (
-          <div className="absolute bottom-4 right-6 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-             <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400/80 dark:text-slate-500 uppercase tracking-wider">
-               <div className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600" />
-               Supports PDF, DOCX, TXT
-             </div>
+          <div className="absolute inset-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-[2px] z-20 flex flex-col items-center justify-center animate-in fade-in">
+            <div className={`w-12 h-12 border-4 border-t-indigo-500 border-slate-200 dark:border-slate-700 rounded-full animate-spin`} />
+            <p className="mt-4 text-sm font-bold text-slate-800 dark:text-slate-200">{formatting ? "Formatting..." : "Parsing..."}</p>
           </div>
         )}
       </div>
-      
-      <style>{`
-        @keyframes scan {
-          0% { top: 0%; opacity: 0; }
-          10% { opacity: 1; }
-          90% { opacity: 1; }
-          100% { top: 100%; opacity: 0; }
-        }
-      `}</style>
     </div>
   );
 };

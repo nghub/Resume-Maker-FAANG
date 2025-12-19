@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { Sparkles, ArrowRight, FileText, Moon, Sun, CloudSnow, Building2, RotateCcw } from 'lucide-react';
 import { analyzeResume, validateAndFormatResume } from './services/geminiService';
 import { parseFile, validateDuplicateFile } from './services/fileParser';
-import { AnalysisResult, LoadingState, Improvement, HistoryItem } from './types';
+import { AnalysisResult, LoadingState, Improvement, HistoryItem, SavedResume } from './types';
 import InputArea from './components/InputArea';
 import ChatAssistant from './components/ChatAssistant';
 import LoadingScreen from './components/LoadingScreen';
@@ -11,9 +12,11 @@ import Toast, { ToastType } from './components/Toast';
 import Snowfall from './components/Snowfall';
 import SantaHat from './components/SantaHat';
 import MarkdownViewer from './components/MarkdownViewer';
+import LibraryModal from './components/LibraryModal';
 
 const HISTORY_KEY = 'ats_optima_device_history';
 const DRAFT_RESUME_KEY = 'ats_optima_draft_resume';
+const LIBRARY_KEY = 'ats_optima_library';
 
 declare global {
   interface Window {
@@ -32,6 +35,8 @@ const App: React.FC = () => {
   const [parsingFile, setParsingFile] = useState<string | null>(null);
   const [isFormattingResume, setIsFormattingResume] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [savedResumes, setSavedResumes] = useState<SavedResume[]>([]);
+  const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [errorState, setErrorState] = useState<{ message: string; type: ToastType } | null>(null);
   const [isSnowing, setIsSnowing] = useState(false);
   
@@ -72,11 +77,17 @@ const App: React.FC = () => {
       try {
         setHistory(JSON.parse(savedHistory));
       } catch (e) {
-        console.error("Failed to parse history", e);
         setHistory([]);
       }
-    } else {
-      setHistory([]);
+    }
+    
+    const library = localStorage.getItem(LIBRARY_KEY);
+    if (library) {
+      try {
+        setSavedResumes(JSON.parse(library));
+      } catch (e) {
+        setSavedResumes([]);
+      }
     }
 
     const savedDraft = localStorage.getItem(DRAFT_RESUME_KEY);
@@ -114,6 +125,37 @@ const App: React.FC = () => {
     showToast("Application reset for new scan", 'info');
   };
 
+  const handleSaveToLibrary = (content: string) => {
+    const name = window.prompt("Enter a name for this resume version:", `Optimized - ${new Date().toLocaleDateString()}`);
+    if (!name) return;
+
+    const newResume: SavedResume = {
+      id: Date.now().toString(),
+      name,
+      content,
+      updatedAt: new Date().toLocaleDateString()
+    };
+
+    const updated = [newResume, ...savedResumes];
+    setSavedResumes(updated);
+    localStorage.setItem(LIBRARY_KEY, JSON.stringify(updated));
+    showToast("Resume saved to library", 'success');
+  };
+
+  const handleDeleteFromLibrary = (id: string) => {
+    const updated = savedResumes.filter(r => r.id !== id);
+    setSavedResumes(updated);
+    localStorage.setItem(LIBRARY_KEY, JSON.stringify(updated));
+    showToast("Resume removed from library", 'info');
+  };
+
+  const handleSelectFromLibrary = (resume: SavedResume) => {
+    setResumeText(resume.content);
+    setResumeFileName(`Library: ${resume.name}`);
+    setIsLibraryOpen(false);
+    showToast("Loaded from library", 'success');
+  };
+
   const saveToHistory = (newResult: AnalysisResult, jd: string, resume: string) => {
     const newItem: HistoryItem = {
       id: Date.now().toString(),
@@ -129,20 +171,11 @@ const App: React.FC = () => {
 
     const updatedHistory = [newItem, ...history].slice(0, 5);
     setHistory(updatedHistory);
-    
-    try {
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
-    } catch (e) {
-      const reducedHistory = updatedHistory.slice(0, 3);
-      setHistory(reducedHistory);
-    }
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
   };
 
   const loadHistoryItem = (item: HistoryItem) => {
-    if (status !== LoadingState.IDLE && !window.confirm("You have unsaved changes or an active analysis. Are you sure you want to load this history item? Current progress will be lost.")) {
-      return;
-    }
-
+    if (status !== LoadingState.IDLE && !window.confirm("Active analysis in progress. Load history and discard current?")) return;
     setResult(item.result);
     setJdText(item.fullJd || item.jdPreview);
     setResumeText(item.fullResume || item.resumePreview);
@@ -164,20 +197,19 @@ const App: React.FC = () => {
 
   const handleValidateAndFormat = async (text: string) => {
     if (!text.trim()) return;
-    
     setIsFormattingResume(true);
     try {
       const result = await validateAndFormatResume(text);
       if (result.isValidResume) {
         setResumeText(result.formattedContent);
-        showToast("Resume validated and formatted successfully", 'success');
+        showToast("Resume formatted", 'success');
       } else {
         setResumeText(text);
-        showToast(`Warning: This may not be a valid resume. ${result.reason}`, 'error');
+        showToast(`Warning: ${result.reason}`, 'error');
       }
     } catch (error) {
       setResumeText(text);
-      showToast("Smart formatting unavailable. Using raw text.", 'info');
+      showToast("Smart formatting unavailable", 'info');
     } finally {
       setIsFormattingResume(false);
     }
@@ -189,7 +221,6 @@ const App: React.FC = () => {
       const currentName = type === 'jd' ? jdFileName : resumeFileName;
       validateDuplicateFile(file, currentName);
       const text = await parseFile(file);
-      
       if (type === 'jd') {
         setJdText(text);
         setJdFileName(file.name);
@@ -197,8 +228,7 @@ const App: React.FC = () => {
         setResumeText(text);
         setResumeFileName(file.name);
       }
-      
-      showToast(`${file.name} parsed successfully`, 'success');
+      showToast(`${file.name} parsed`, 'success');
     } catch (error) {
       showToast((error as Error).message, 'error');
     } finally {
@@ -208,14 +238,11 @@ const App: React.FC = () => {
 
   const handleAnalyze = async () => {
     if (!jdText.trim() || !resumeText.trim()) {
-      showToast("Please provide both Job Description and Resume text.", 'error');
+      showToast("Provide both Job Description and Resume.", 'error');
       return;
     }
-    
     setStatus(LoadingState.ANALYZING);
     setResult(null);
-    setPreviousResume(undefined);
-    
     try {
       const data = await analyzeResume(resumeText, jdText, companyName);
       setResult(data);
@@ -234,12 +261,9 @@ const App: React.FC = () => {
   };
 
   const handleFixRequest = (improvement: Improvement, context?: { before: string; after: string }) => {
-    let prompt = "";
-    if (context) {
-       prompt = `Apply this specific improvement: Find "${context.before}" and replace it with "${context.after}".`;
-    } else {
-       prompt = `Help me fix the ${improvement.title} issue in ${improvement.section}. Recommendation: ${improvement.recommendation}`;
-    }
+    let prompt = context 
+      ? `Apply fix: Replace "${context.before}" with "${context.after}".`
+      : `Fix ${improvement.title} issue. Recommendation: ${improvement.recommendation}`;
     setChatTriggerMessage(prompt);
     setActiveSection('resume');
   };
@@ -252,17 +276,12 @@ const App: React.FC = () => {
   };
   
   const handleScoreUpdate = (newScore: number) => {
-    if (result) {
-        setResult({ ...result, overallScore: newScore });
-    }
+    if (result) setResult({ ...result, overallScore: newScore });
   };
 
   const handleDownloadPdf = () => {
     const element = document.getElementById('printable-resume-area');
-    if (!element || !window.html2pdf) {
-      window.print();
-      return;
-    }
+    if (!element || !window.html2pdf) { window.print(); return; }
     const opt = {
       margin: 10,
       filename: `${result?.personalInfo.name || 'Optimized'}_Resume.pdf`,
@@ -277,21 +296,24 @@ const App: React.FC = () => {
     });
   };
 
-  if (status === LoadingState.ANALYZING) {
-    return <LoadingScreen />;
-  }
+  if (status === LoadingState.ANALYZING) return <LoadingScreen />;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#1A1A1A] font-sans text-slate-900 dark:text-slate-200 relative overflow-x-hidden transition-colors duration-300">
       {isSnowing && <Snowfall />}
+      <LibraryModal 
+        isOpen={isLibraryOpen} 
+        onClose={() => setIsLibraryOpen(false)} 
+        resumes={savedResumes} 
+        onSelect={handleSelectFromLibrary} 
+        onDelete={handleDeleteFromLibrary} 
+      />
       
       <div id="printable-resume-area" className="hidden print:block font-sans bg-white text-black">
         {result && <MarkdownViewer content={result.rewrittenResume || ""} />}
       </div>
 
-      {errorState && (
-        <Toast message={errorState.message} type={errorState.type} onClose={() => setErrorState(null)} />
-      )}
+      {errorState && <Toast message={errorState.message} type={errorState.type} onClose={() => setErrorState(null)} />}
 
       <header className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/10 sticky top-0 z-30 print:hidden transition-colors">
         <div className="max-w-[1600px] mx-auto px-4 h-16 flex items-center justify-between">
@@ -304,13 +326,6 @@ const App: React.FC = () => {
             </h1>
           </div>
           
-          {status === LoadingState.COMPLETE && (
-             <div className="hidden md:flex items-center gap-1 bg-slate-100 dark:bg-white/5 p-1 rounded-lg">
-                <button onClick={() => setActiveSection('dashboard')} className={`px-4 py-1.5 rounded-md text-sm font-medium ${activeSection === 'dashboard' ? 'bg-white dark:bg-white/10 text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Dashboard</button>
-                <button onClick={() => setActiveSection('resume')} className={`px-4 py-1.5 rounded-md text-sm font-medium ${activeSection === 'resume' ? 'bg-white dark:bg-white/10 text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Rewriter</button>
-             </div>
-          )}
-          
           <div className="flex items-center gap-4">
              <button onClick={toggleSnow} className={`p-2 rounded-full ${isSnowing ? 'text-blue-400' : 'text-slate-500'}`} title="Toggle Snowfall"><CloudSnow className="w-5 h-5" /></button>
              <button onClick={toggleTheme} className="p-2 text-slate-500" title="Toggle Dark Mode">{theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}</button>
@@ -322,7 +337,6 @@ const App: React.FC = () => {
         {status !== LoadingState.COMPLETE && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="text-center mb-10 max-w-3xl mx-auto flex flex-col items-center">
-              {/* Removed the Sparkles icon box as requested */}
               <h2 className="text-5xl font-extrabold mb-3 tracking-tight text-slate-900 dark:text-white">
                 <span className="relative inline-block">
                   A
@@ -335,7 +349,7 @@ const App: React.FC = () => {
             </div>
 
             <div className="max-w-2xl mx-auto mb-8">
-              <div className="bg-white/80 dark:bg-white/5 p-5 rounded-2xl border-4 border-indigo-500/30 dark:border-indigo-500/50 shadow-2xl backdrop-blur-xl ring-4 ring-indigo-500/10 transition-colors">
+              <div className="bg-white/80 dark:bg-slate-900/50 p-5 rounded-2xl border-4 border-indigo-500/30 dark:border-indigo-500/50 shadow-2xl backdrop-blur-xl ring-4 ring-indigo-500/10 transition-colors">
                 <div className="flex items-center justify-between mb-3">
                   <label className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300">
                     <Building2 className="w-4 h-4 text-indigo-600" /> Target Company
@@ -345,16 +359,24 @@ const App: React.FC = () => {
                 <input 
                   value={companyName} 
                   onChange={(e) => setCompanyName(e.target.value)} 
-                  placeholder="Enter Company Name (e.g. Amazon, Google, Netflix)..." 
-                  className="w-full px-5 py-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-slate-800 dark:text-indigo-300 placeholder:text-slate-400 dark:placeholder:text-slate-600" 
+                  placeholder="Enter Company Name..." 
+                  className="w-full px-5 py-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-slate-800 dark:text-indigo-300" 
                 />
-                <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 font-medium italic">We'll analyze cultural fit based on this company's known values.</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
               <InputArea type="jd" value={jdText} onChange={setJdText} onFileSelect={(file) => handleFileSelect(file, 'jd')} parsing={parsingFile === 'jd'} />
-              <InputArea type="resume" value={resumeText} onChange={setResumeText} onFileSelect={(file) => handleFileSelect(file, 'resume')} parsing={parsingFile === 'resume'} formatting={isFormattingResume} onAutoFormat={() => handleValidateAndFormat(resumeText)} />
+              <InputArea 
+                type="resume" 
+                value={resumeText} 
+                onChange={setResumeText} 
+                onFileSelect={(file) => handleFileSelect(file, 'resume')} 
+                parsing={parsingFile === 'resume'} 
+                formatting={isFormattingResume} 
+                onAutoFormat={() => handleValidateAndFormat(resumeText)} 
+                onOpenLibrary={() => setIsLibraryOpen(true)}
+              />
             </div>
 
             <div className="flex justify-center mb-16">
@@ -379,7 +401,8 @@ const App: React.FC = () => {
             resumeText={resumeText} 
             previousResume={previousResume} 
             onUpdateResume={handleResumeUpdate} 
-            onDownloadPdf={handleDownloadPdf} 
+            onDownloadPdf={handleDownloadPdf}
+            onSaveToLibrary={handleSaveToLibrary}
           />
         )}
 

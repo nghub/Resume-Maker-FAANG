@@ -37,6 +37,21 @@ export interface CultureFit {
   analysis: string;
 }
 
+export interface VisualSettings {
+  fontFamily: 'inter' | 'roboto' | 'merriweather' | 'jetbrains';
+  primaryColor: string;
+  layout: 'classic' | 'modern' | 'minimal';
+  fontSize: 'sm' | 'base' | 'lg';
+  lineHeight: 'tight' | 'normal' | 'relaxed';
+}
+
+export interface SavedResume {
+  id: string;
+  name: string;
+  content: string;
+  updatedAt: string;
+}
+
 export interface AnalysisResult {
   overallScore: number;
   projectedScore: number; // Score after applying fixes
